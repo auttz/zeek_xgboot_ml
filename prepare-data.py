@@ -38,11 +38,7 @@ def transform_data(df):
 
 
     # 4) Extract time features จาก @timestamp
-    df["@timestamp"] = pd.to_datetime(
-        df["@timestamp"], 
-        errors="coerce", 
-        format="%b %d, %Y @ %H:%M:%S.%f"
-    )
+    df["@timestamp"] = pd.to_datetime(df["@timestamp"], errors="coerce", format="%b %d, %Y @ %H:%M:%S.%f")
     df["hour"] = df["@timestamp"].dt.hour.fillna(0).astype(int)
     df["weekday"] = df["@timestamp"].dt.weekday.fillna(0).astype(int)
 
