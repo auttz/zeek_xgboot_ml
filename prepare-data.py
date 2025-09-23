@@ -49,6 +49,40 @@ def transform_data(df):
     )
     return final_df
 
+def create_label(df):
+    # กำหนดให้ column label ทุก row มีค่าเป็น 0
+    df['label'] = 0
+    # ✅ Rule 1: HTTP Status Code ที่เริ่มด้วย 4xx หรือ 5xx มักบ่งบอกความผิดปกติ
+    if 'status_code' in df.columns:
+        for i in range(len(df)):
+            status_value = str(df.loc[i,'status_code'])
+            if status_value.startswith('4') or status_value.startswith('5'):
+                df.loc[i,'label'] = 1
+
+    risky_tokens = ["login", "admin", "update", "download", "upload", 
+                    "passwd", "config", "reset", "token", "php"]
+    
+    # หาคอลัมน์ที่เกี่ยวกับ URL (เช่น url.original)
+    url_columns = []
+    for col in df.columns:
+        if 'url' in col:
+            url_columns.append(col)
+    
+    # วนทีละแถวแล้วตรวจสอบ URL
+    for i in range(len(df)):
+        for col in url_columns:
+            url_value = str(df.loc[i, col]).lower()
+            for token in risky_tokens:
+                if token in url_value:
+                    df.loc[i, "label"] = 1
+                    break   # เจอคำเสี่ยงแล้วไม่ต้องเช็กต่อ
+            # ถ้าเจอแล้วก็ออกจาก loop column ได้เลย
+            if df.loc[i, "label"] == 1:
+                break
+
+    return df
+
+
 def main():
     input_folder = sys.argv[1]
     output_folder = sys.argv[2]
@@ -60,13 +94,15 @@ def main():
     df = load_csv(input_folder, keep_fields)
 
     df_transform = transform_data(df)
-    train_df, test_df = train_test_split(df_transform, test_size=test_pct/100, random_state=42)
+    df_labeled = create_label(df_transform)
+    train_df, test_df = train_test_split(df_labeled, test_size=test_pct/100, random_state=42)
 
     train_path = os.path.join(output_folder, 'training-set.csv')
     test_path = os.path.join(output_folder, 'testing-set.csv')
 
     train_df.to_csv(train_path, index=False)
     test_df.to_csv(test_path, index=False)
+    print("✅ Data saved")
 
 if __name__ == '__main__':
     main()
