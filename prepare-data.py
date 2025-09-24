@@ -14,16 +14,29 @@ def load_csv(input_folder, keep_fields):
         my_df.append(df)
     return pd.concat(my_df, ignore_index=True)
 
-def ip_to_int(ip):
+def ip_to_octets(ip):
     try:
-        return int(ipaddress.ip_address(ip))
+        parts = str(ip).split(".")
+        if len(parts) == 4:
+            octets = []
+            for p in parts:
+                try:
+                    octets.append(int(p))
+                except:
+                    octets.append(0)
+            return octets
+        else:
+            return [0, 0, 0, 0]  # กรณีไม่ใช่ IPv4
     except:
-        return 0
+        return [0, 0, 0, 0]      # กรณี error อื่น ๆ
+
 
 def transform_data(df):
-    # 1) แปลง source/destination IP เป็นเลขจำนวนเต็ม
-    df["source_ip"] = df["source.ip"].apply(ip_to_int)
-    df["destination_ip"] = df["destination.ip"].apply(ip_to_int)
+    # 1) แปลง source.ip → src_oct1..src_oct4 แปลง destination.ip → dst_oct1..dst_oct4
+    src_octets = df['source.ip'].apply(ip_to_octets)
+    df[["source_ip_oct1", "source_ip_oct2", "source_ip_oct3", "source_ip_oct4"]] = pd.DataFrame(src_octets.tolist(), index=df.index)
+    dest_octets = df['destination.ip'].apply(ip_to_octets)
+    df[["destination_ip_oct1", "destination_ip_oct2", "destination_ip_oct3", "destination_ip_oct4"]] = pd.DataFrame(dest_octets.tolist(), index=df.index)
 
     # 2) แปลง url.original ด้วย TF-IDF โดยใช้ whitelist vocabulary
     whitelist_tokens = ["login", "admin", "update", "download", "upload", 
@@ -44,44 +57,18 @@ def transform_data(df):
 
     # 5) รวม features ทั้งหมด
     final_df = pd.concat(
-        [df[["source_ip", "destination_ip", "status_code", "hour", "weekday"]], url_df],
+        [df[[
+            "source_ip_oct1", "source_ip_oct2", "source_ip_oct3", "source_ip_oct4",
+            "destination_ip_oct1", "destination_ip_oct2", "destination_ip_oct3", "destination_ip_oct4",
+            "status_code", "hour", "weekday"
+        ]],
+        url_df],
         axis=1
     )
+
+    # สร้าง label
+    final_df['label'] = df['ioc.dest_ip_misp_is_alert'].astype(int)
     return final_df
-
-def create_label(df):
-    # กำหนดให้ column label ทุก row มีค่าเป็น 0
-    df['label'] = 0
-    # ✅ Rule 1: HTTP Status Code ที่เริ่มด้วย 4xx หรือ 5xx มักบ่งบอกความผิดปกติ
-    if 'status_code' in df.columns:
-        for i in range(len(df)):
-            status_value = str(df.loc[i,'status_code'])
-            if status_value.startswith('4') or status_value.startswith('5'):
-                df.loc[i,'label'] = 1
-
-    risky_tokens = ["login", "admin", "update", "download", "upload", 
-                    "passwd", "config", "reset", "token", "php"]
-    
-    # หาคอลัมน์ที่เกี่ยวกับ URL (เช่น url.original)
-    url_columns = []
-    for col in df.columns:
-        if 'url' in col:
-            url_columns.append(col)
-    
-    # วนทีละแถวแล้วตรวจสอบ URL
-    for i in range(len(df)):
-        for col in url_columns:
-            url_value = str(df.loc[i, col]).lower()
-            for token in risky_tokens:
-                if token in url_value:
-                    df.loc[i, "label"] = 1
-                    break   # เจอคำเสี่ยงแล้วไม่ต้องเช็กต่อ
-            # ถ้าเจอแล้วก็ออกจาก loop column ได้เลย
-            if df.loc[i, "label"] == 1:
-                break
-
-    return df
-
 
 def main():
     input_folder = sys.argv[1]
@@ -89,13 +76,17 @@ def main():
     test_pct = int(os.getenv("TEST_SET_PCT", 20))
 
     # keep_fields เอาเฉพาะฟีลด์ที่ต้องใช้
-    keep_fields = ['@timestamp', 'source.ip', 'destination.ip', 'url.original', 'http.response.status_code']  
+    keep_fields = ['@timestamp', 
+                   'source.ip', 
+                   'destination.ip', 
+                   'url.original', 
+                   'http.response.status_code',
+                   'ioc.dest_ip_misp_is_alert']  
     os.makedirs(output_folder, exist_ok=True)
     df = load_csv(input_folder, keep_fields)
 
     df_transform = transform_data(df)
-    df_labeled = create_label(df_transform)
-    train_df, test_df = train_test_split(df_labeled, test_size=test_pct/100, random_state=42)
+    train_df, test_df = train_test_split(df_transform, test_size=test_pct/100, random_state=42,stratify=df_transform["label"])
 
     train_path = os.path.join(output_folder, 'training-set.csv')
     test_path = os.path.join(output_folder, 'testing-set.csv')
