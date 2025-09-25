@@ -1,0 +1,43 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2. Login Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 3. Set version variables
+      - name: Set version variables
+        id: vars
+        run: |
+          VERSION="1.0.${{ github.run_number }}"   # 👈 auto increment patch
+          BRANCH="main"
+          COMMIT_SHA=$(echo $GITHUB_SHA | cut -c1-6)
+          TAG="${VERSION}-${BRANCH}-${COMMIT_SHA}"
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      # 4. Build Docker image
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/zeek-prepare-data:${TAG} .
+
+      # 5. Push Docker image
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/zeek-prepare-data:${TAG}
