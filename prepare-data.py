@@ -10,9 +10,16 @@ def load_csv(input_folder, keep_fields):
         sys.exit('There is no CSV Files')
     my_df = []
     for f in files:
-        df = pd.read_csv(f, on_bad_lines='skip', usecols=keep_fields)
+        df = pd.read_csv(f, on_bad_lines='skip')  # 👈 อ่านทั้งหมดก่อน
+        # เติมคอลัมน์ที่หายไปให้ครบ
+        for col in keep_fields:
+            if col not in df.columns:
+                df[col] = None
+        # เลือกเฉพาะคอลัมน์ที่ต้องใช้
+        df = df[keep_fields]
         my_df.append(df)
     return pd.concat(my_df, ignore_index=True)
+
 
 def ip_to_octets(ip):
     try:
@@ -84,6 +91,9 @@ def main():
                    'ioc.dest_ip_misp_is_alert']  
     os.makedirs(output_folder, exist_ok=True)
     df = load_csv(input_folder, keep_fields)
+    print(df.head())      # ดูข้อมูล 5 แถวแรก
+    print(df.tail())      # ดู 5 แถวสุดท้าย
+    print(df.shape)       # ดูจำนวน row, col
 
     df_transform = transform_data(df)
     train_df, test_df = train_test_split(df_transform, test_size=test_pct/100, random_state=42,stratify=df_transform["label"])
