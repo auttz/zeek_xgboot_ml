@@ -24,7 +24,7 @@ jobs:
       - name: Set version variables
         id: vars
         run: |
-          VERSION="1.0.${{ github.run_number }}"   # 👈 auto increment patch
+          VERSION="1.0.${{ github.run_number }}"
           BRANCH="main"
           COMMIT_SHA=$(echo $GITHUB_SHA | cut -c1-6)
           TAG="${VERSION}-${BRANCH}-${COMMIT_SHA}"
