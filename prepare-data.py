@@ -56,7 +56,6 @@ def transform_data(df):
     # 3) แปลง http.response.status_code → int (handle non-numeric เช่น '-')
     df["status_code"] = pd.to_numeric(df["http.response.status_code"], errors="coerce").fillna(0).astype(int)
 
-
     # 4) Extract time features จาก @timestamp
     df["@timestamp"] = pd.to_datetime(df["@timestamp"], errors="coerce", format="%b %d, %Y @ %H:%M:%S.%f")
     df["hour"] = df["@timestamp"].dt.hour.fillna(0).astype(int)
