@@ -90,9 +90,9 @@ def main():
                    'ioc.dest_ip_misp_is_alert']  
     os.makedirs(output_folder, exist_ok=True)
     df = load_csv(input_folder, keep_fields)
-    print(df.head())      # ดูข้อมูล 5 แถวแรก
-    print(df.tail())      # ดู 5 แถวสุดท้าย
-    print(df.shape)       # ดูจำนวน row, col
+    #print(df.head())      # ดูข้อมูล 5 แถวแรก
+    #print(df.tail())      # ดู 5 แถวสุดท้าย
+    #print(df.shape)       # ดูจำนวน row, col
 
     df_transform = transform_data(df)
     train_df, test_df = train_test_split(df_transform, test_size=test_pct/100, random_state=42,stratify=df_transform["label"])
