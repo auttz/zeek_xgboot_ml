@@ -1,0 +1,11 @@
+# Ignore datasets
+data/input/
+data/output/
+
+# Ignore CSVs anywhere
+*.csv
+*.pkl
+
+# Git files
+.git
+.gitignore
