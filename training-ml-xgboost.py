@@ -23,7 +23,7 @@ def main(output_folder):
     x_test = df_test.drop(columns=['label'])
     y_test = df_test['label']
     #ใช้ xgboost model
-    model = xgb.XGBClassifier(n_estimators=100, 
+    model = xgb.XGBClassifier(n_estimators=100, # parameter ไม่ควร hardcode และควรรับ จาก env var
     learning_rate=0.1,max_depth=6, random_state=42, use_label_encoder=False, eval_metric="logloss")
     model.fit(x_train,y_train)
 
