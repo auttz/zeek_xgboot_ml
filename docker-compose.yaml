@@ -1,0 +1,24 @@
+services:
+  prepare-data:
+    build: .
+    container_name: prepare-data
+    volumes:
+      - ./data/input:/zeek_ml/data/input
+      - ./data/output:/zeek_ml/data/output
+    environment:
+      - TEST_SET_PCT=20
+    command: python prepare-data.py /zeek_ml/data/input /zeek_ml/data/output
+
+  training:
+    build: .
+    container_name: training-ml
+    volumes:
+      - ./data/output:/zeek_ml/data/output
+    environment:
+      - N_ESTIMATORS=200
+      - LEARNING_RATE=0.05
+      - MAX_DEPTH=6
+      - RANDOM_STATE=42
+    depends_on:
+      - prepare-data
+    command: python training-ml-xgboost.py /zeek_ml/data/output
