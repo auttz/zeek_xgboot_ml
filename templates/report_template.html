@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Classification Report</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container mt-4">
+
+  <h2 class="mb-4">Classification Report</h2>
+
+  <div class="card p-3 mb-3">
+    <p><b>Accuracy:</b> {{ accuracy }}</p>
+    <p><b>จำนวนฟีเจอร์ที่ใช้ในการเทรน:</b> {{ num_features }}</p>
+    <p><b>เวลาที่ใช้ในการเทรน:</b> {{ duration }} วินาที</p>
+  </div>
+
+  <h3 class="mt-4">Features ที่ใช้ในการ Train</h3>
+  <ul class="list-group mb-3">
+    {% for f in features %}
+      <li class="list-group-item">{{ f }}</li>
+    {% endfor %}
+  </ul>
+
+  <h3 class="mt-4">Parameters ที่ใช้ในการ Train xgboost model</h3>
+  <ul class="list-group mb-3">
+    {% for key, value in params.items() %}
+      <li class="list-group-item">{{ key }}: {{ value }}</li>
+    {% endfor %}
+  </ul>
+
+  <h3 class="mt-4">Detailed Classification Report</h3>
+  <div class="table-responsive">
+    {{ report_html | safe }}
+  </div>
+
+</body>
+</html>
