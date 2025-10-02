@@ -7,7 +7,7 @@ services:
       - ./data/output:/zeek_ml/data/output
     environment:
       - TEST_SET_PCT=20
-    command: python prepare-data.py /zeek_ml/data/input /zeek_ml/data/output
+    command: python prepare-data.py data/input data/output
 
   training:
     build: .
@@ -21,4 +21,4 @@ services:
       - RANDOM_STATE=42
     depends_on:
       - prepare-data
-    command: python training-ml-xgboost.py /zeek_ml/data/output
+    command: python training-ml-xgboost.py data/output
