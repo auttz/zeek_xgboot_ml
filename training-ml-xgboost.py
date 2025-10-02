@@ -1,14 +1,15 @@
-import os,sys
+import os, sys
 import pandas as pd
 import xgboost as xgb
 import time
 from sklearn.metrics import accuracy_score, classification_report
 import joblib
+from jinja2 import Environment, FileSystemLoader
 
 def main(output_folder):
     # โหลดไฟล์ training / testing
-    train_file = os.path.join(output_folder,'training-set.csv')
-    test_file = os.path.join(output_folder,'testing-set.csv')
+    train_file = os.path.join(output_folder, 'training-set.csv')
+    test_file = os.path.join(output_folder, 'testing-set.csv')
 
     if not os.path.exists(train_file) or not os.path.exists(test_file):
         sys.exit('There is no training-set or testing-set.csv')
@@ -43,7 +44,7 @@ def main(output_folder):
 
     # จับเวลา train
     start_time = time.time()
-    model.fit(x_train,y_train)
+    model.fit(x_train, y_train)
     end_time = time.time()
     time_duration = end_time - start_time
 
@@ -58,7 +59,7 @@ def main(output_folder):
 
     # predict & evaluate
     y_predict = model.predict(x_test)
-    acc = accuracy_score(y_test,y_predict)
+    acc = accuracy_score(y_test, y_predict)
     print(f"✅ Accuracy: {acc:.4f}")
     print("\nClassification Report:")
     print(classification_report(y_test, y_predict))
@@ -69,40 +70,31 @@ def main(output_folder):
     report_dict = classification_report(y_test, y_predict, output_dict=True)
     df_report = pd.DataFrame(report_dict).transpose()
 
-    # export HTML
+    # เตรียม context สำหรับ template
+    context = {
+        "accuracy": f"{acc:.4f}",
+        "num_features": num_features,
+        "duration": f"{time_duration:.2f}",
+        "features": features_used,
+        "params": params_used,
+        "report_html": df_report.to_html(classes="table table-striped table-bordered", border=0)
+    }
+
+    # render ผ่าน jinja2
+    env = Environment(loader=FileSystemLoader("templates"))
+    template = env.get_template("report_template.html")
+    html_out = template.render(context)
+
+    # save HTML
     report_path = os.path.join(output_folder, "classification_report.html")
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write(f"<h2>Classification Report</h2>\n")
-        f.write(f"<p>Accuracy: {acc:.4f}</p>\n")
-        f.write(f"<p>จำนวนฟีเจอร์ที่ใช้ในการเทรน: {num_features}</p>\n")
-        f.write(f"<p>เวลาที่ใช้ในการเทรน: {time_duration:.2f} วินาที</p>\n")
-
-        # แสดง features
-        if features_used:
-            f.write("<h3>Features ที่ใช้ในการ Train</h3><ul>\n")
-            for col in features_used:
-                f.write(f"<li>{col}</li>\n")
-            f.write("</ul>\n")
-        else:
-            f.write("<p><b>⚠️ ไม่มีฟีเจอร์ที่ถูกใช้งาน</b></p>\n")
-
-        # แสดง parameters
-        f.write("<h3>Parameters ที่ใช้ในการ Train xgboost model</h3>\n<ul>\n")
-        for key, value in params_used.items():
-            f.write(f"<li>{key}: {value}</li>\n")
-        f.write("</ul>\n")
-
-        # คั่น layout ให้ชัด
-        f.write("<hr>\n")
-
-        # ใส่ class bootstrap ให้ตารางสวยขึ้น
-        f.write(df_report.to_html(classes='dataframe table table-striped'))
+        f.write(html_out)
 
     print(f"📑 HTML report saved to {report_path}")
 
     # save model
-    model_path = os.path.join(output_folder,'xgboost-model.pkl')
-    joblib.dump(model,model_path)
+    model_path = os.path.join(output_folder, 'xgboost-model.pkl')
+    joblib.dump(model, model_path)
     print(f"💾 Model saved to {model_path}")
 
 if __name__ == '__main__':
