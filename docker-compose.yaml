@@ -3,8 +3,8 @@ services:
     build: .
     container_name: prepare-data
     volumes:
-      - ./data/input:/zeek_ml/data/input
-      - ./data/output:/zeek_ml/data/output
+      - ./data/input:/app/data/input
+      - ./data/output:/app/data/output
     environment:
       - TEST_SET_PCT=20
     command: python prepare-data.py data/input data/output
@@ -13,7 +13,7 @@ services:
     build: .
     container_name: training-ml
     volumes:
-      - ./data/output:/zeek_ml/data/output
+      - ./data/output:/app/data/output
     environment:
       - N_ESTIMATORS=200
       - LEARNING_RATE=0.05
