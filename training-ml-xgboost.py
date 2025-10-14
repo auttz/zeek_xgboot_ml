@@ -32,6 +32,8 @@ def main(output_folder):
     learning_rate = float(os.getenv("LEARNING_RATE", 0.1))
     max_depth = int(os.getenv("MAX_DEPTH", 6))
     random_state = int(os.getenv("RANDOM_STATE", 42))
+    scale_pos_weight = float(os.getenv("SCALE_POS_WEIGHT", 24))
+
 
     model = xgb.XGBClassifier(
         n_estimators=n_estimators,
@@ -39,7 +41,8 @@ def main(output_folder):
         max_depth=max_depth,
         random_state=random_state,
         use_label_encoder=False,
-        eval_metric="logloss"
+        eval_metric="logloss",
+        scale_pos_weight=scale_pos_weight
     )
 
     # จับเวลา train
@@ -54,30 +57,43 @@ def main(output_folder):
         "max_depth": max_depth,
         "random_state": random_state,
         "use_label_encoder": False,
-        "eval_metric": "logloss"
+        "eval_metric": "logloss",
+        "scale_pos_weight": scale_pos_weight    
     }
 
     # predict & evaluate
     y_predict = model.predict(x_test)
     acc = accuracy_score(y_test, y_predict)
-    print(f"✅ Accuracy: {acc:.4f}")
+    print(f"✅ Accuracy: {acc * 100:.2f}")
     print("\nClassification Report:")
     print(classification_report(y_test, y_predict))
-
     num_features = x_train.shape[1]
 
-    # classification report → dict → DataFrame
+    # classification report → dict → แปลงค่าเป็นเปอร์เซ็นต์ → DataFrame
     report_dict = classification_report(y_test, y_predict, output_dict=True)
+    for label, metrics in report_dict.items():
+        if isinstance(metrics, dict):
+            for key, value in metrics.items():
+                if key != "support":
+                    report_dict[label][key] = round(value * 100, 2)
+                else:
+                    report_dict[label][key] = int(value)
+
+
     df_report = pd.DataFrame(report_dict).transpose()
 
     # เตรียม context สำหรับ template
     context = {
-        "accuracy": f"{acc:.4f}",
+        "accuracy": f"{acc * 100:.2f}%",
         "num_features": num_features,
         "duration": f"{time_duration:.2f}",
         "features": features_used,
         "params": params_used,
-        "report_html": df_report.to_html(classes="table table-striped table-bordered", border=0)
+        "report_html": df_report.to_html(
+            classes="table table-striped table-bordered",
+            border=0,
+            float_format="%.2f"
+        )
     }
 
     # render ผ่าน jinja2

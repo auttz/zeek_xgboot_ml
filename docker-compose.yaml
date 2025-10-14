@@ -15,10 +15,11 @@ services:
     volumes:
       - ./data/output:/app/data/output
     environment:
-      - N_ESTIMATORS=200
-      - LEARNING_RATE=0.05
+      - N_ESTIMATORS=100
+      - LEARNING_RATE=0.1
       - MAX_DEPTH=6
       - RANDOM_STATE=42
+      - SCALE_POS_WEIGHT=12
     depends_on:
       - prepare-data
     command: python training-ml-xgboost.py data/output

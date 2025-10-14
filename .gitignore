@@ -1,5 +1,26 @@
-
-data/input/
-data/output/
-
+# Data
+data/
+logs/
 *.csv
+*.json
+*.pcap
+
+# Environment
+.env
+*.env
+secrets/
+credentials/
+
+# Python & Docker
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+*.pkl
+*.joblib
+
+# Jupyter / Notebook
+.ipynb_checkpoints/
+
+# System
+*.log
