@@ -4,6 +4,7 @@ logs/
 *.csv
 *.json
 *.pcap
+*.xlsx
 
 # Environment
 .env
