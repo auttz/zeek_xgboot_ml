@@ -1,4 +1,7 @@
+version: "3.9"
+
 services:
+  # 1️⃣ เตรียมข้อมูลสำหรับ training/testing set
   prepare-data:
     build: .
     container_name: prepare-data
@@ -7,8 +10,9 @@ services:
       - ./data/output:/app/data/output
     environment:
       - TEST_SET_PCT=20
-    command: python prepare-data.py data/input data/output
+    command: python prepare_data.py data/input data/output
 
+  # 2️⃣ เทรนโมเดล
   training:
     build: .
     container_name: training-ml
@@ -23,3 +27,20 @@ services:
     depends_on:
       - prepare-data
     command: python training-ml-xgboost.py data/output
+
+  # 3️⃣ ทำนาย log ล่าสุดใน newdata/
+  predict:
+    build: .
+    container_name: predict-ml
+    volumes:
+      - ./data/newdata:/app/data/newdata  
+      - ./data/output:/app/data/output
+    depends_on:
+      - training
+    environment:
+      - TZ=Asia/Bangkok
+    command: >
+      python predict.py
+      data/output/xgboost-model.pkl
+      data/newdata
+      data/output/classification_report_predict.html
