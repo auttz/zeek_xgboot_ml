@@ -1,7 +1,4 @@
-version: "3.9"
-
 services:
-  # 1️⃣ เตรียมข้อมูลสำหรับ training/testing set
   prepare-data:
     build: .
     container_name: prepare-data
@@ -12,7 +9,6 @@ services:
       - TEST_SET_PCT=20
     command: python prepare_data.py data/input data/output
 
-  # 2️⃣ เทรนโมเดล
   training:
     build: .
     container_name: training-ml
@@ -28,7 +24,6 @@ services:
       - prepare-data
     command: python training-ml-xgboost.py data/output
 
-  # 3️⃣ ทำนาย log ล่าสุดใน newdata/
   predict:
     build: .
     container_name: predict-ml
@@ -37,10 +32,26 @@ services:
       - ./data/output:/app/data/output
     depends_on:
       - training
+      - minio
     environment:
       - TZ=Asia/Bangkok
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=12345678
     command: >
       python predict.py
       data/output/xgboost-model.pkl
       data/newdata
       data/output/classification_report_predict.html
+  minio:
+    image: minio/minio
+    container_name: minio-ml
+    ports:
+      - "9000:9000"
+      - "9090:9090"
+    volumes:
+      - ./data/minio:/data
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=12345678
+    command: server /data --console-address ":9090"
