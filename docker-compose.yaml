@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   prepare-data:
     build: .
@@ -33,16 +35,15 @@ services:
     depends_on:
       - training
       - minio
-    environment:
-      - TZ=Asia/Bangkok
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=admin
-      - MINIO_SECRET_KEY=12345678
+    env_file:
+      - secret.env
     command: >
       python predict.py
       data/output/xgboost-model.pkl
       data/newdata
       data/output/classification_report_predict.html
+
+  # ☁️ 5️⃣ Object Storage (MinIO)
   minio:
     image: minio/minio
     container_name: minio-ml
@@ -51,7 +52,6 @@ services:
       - "9090:9090"
     volumes:
       - ./data/minio:/data
-    environment:
-      - MINIO_ROOT_USER=admin
-      - MINIO_ROOT_PASSWORD=12345678
+    env_file:
+      - secret.env
     command: server /data --console-address ":9090"

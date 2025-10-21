@@ -94,7 +94,6 @@ def generate_html_report(acc, duration, report_html, output_path):
     print(f"📑 HTML report saved → {output_path}")
     
 
-
 # -------------------------------------------
 # 5️⃣ Upload ขึ้น MinIO
 # -------------------------------------------
