@@ -1,6 +1,15 @@
 version: "3.9"
 
 services:
+  fetch-log:
+    build: .
+    container_name: fetch-log
+    env_file:
+      - secret.env
+    volumes:
+      - ./data/newdata:/app/data/newdata
+    command: python fetch_log.py
+      
   prepare-data:
     build: .
     container_name: prepare-data
@@ -33,6 +42,7 @@ services:
       - ./data/newdata:/app/data/newdata  
       - ./data/output:/app/data/output
     depends_on:
+      - fetch-log
       - training
       - minio
     env_file:
@@ -55,3 +65,13 @@ services:
     env_file:
       - secret.env
     command: server /data --console-address ":9090"
+  dashboard:
+    build: .
+    container_name: dashboard-ml
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data/output:/app/data/output
+    depends_on:
+      - predict
+    command: streamlit run app_dashboard.py --server.port=8501 --server.address=0.0.0.0
