@@ -20,6 +20,32 @@
   <div class="table-responsive">
     {{ report_html | safe }}
   </div>
+  <h2>⚠️ Alert Logs (Predicted as Malicious)</h2>
+<p>Showing top 20 abnormal logs detected by model.</p>
+
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>Timestamp</th>
+      <th>Destination Port</th>
+      <th>Protocol</th>
+      <th>HTTP Method</th>
+      <th>User-Agent</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in alerts %}
+    <tr style="background-color:#fff3f3;">
+      <td>{{ row["@timestamp"] }}</td>
+      <td>{{ row["destination.port"] }}</td>
+      <td>{{ row["network.protocol"] }}</td>
+      <td>{{ row["http.request.method"] }}</td>
+      <td>{{ row["user_agent.original"] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
 
 </body>
 </html>

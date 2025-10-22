@@ -5,9 +5,7 @@ from datetime import datetime
 import re
 import os
 
-# ----------------------------
 # 🧭 Page Config
-# ----------------------------
 st.set_page_config(
     page_title="Zeek XGBoost ML Dashboard",
     page_icon="🧠",
@@ -17,9 +15,7 @@ st.set_page_config(
 st.title("🧠 Zeek XGBoost ML Dashboard v3")
 st.markdown("Monitoring and Insights Dashboard for Zeek ML Pipeline")
 
-# ----------------------------
 # 📥 Load Data
-# ----------------------------
 PREDICT_FILE = "data/output/predict_result.csv"
 ARCHIVE_FILE = "data/output/archive_log.txt"
 
@@ -38,9 +34,7 @@ if 'prediction' not in df.columns:
     st.error("❌ 'prediction' column not found in predict_result.csv")
     st.stop()
 
-# ----------------------------
 # 🧩 Model Summary
-# ----------------------------
 st.subheader("📊 Model Summary")
 total_logs = len(df)
 alerts = int(df['prediction'].sum())
@@ -52,9 +46,7 @@ col1.metric("🧾 Total Logs", f"{total_logs:,}")
 col2.metric("🚨 Alerts", f"{alerts:,} ({alert_ratio:.1f}%)")
 col3.metric("✅ Normal", f"{normals:,}")
 
-# ----------------------------
 # 📈 Bar Chart (Alerts vs Normal)
-# ----------------------------
 st.markdown("### 📊 Alert Distribution")
 
 # ใช้ columns ช่วยจัดให้อยู่กึ่งกลางและควบคุมขนาด
@@ -70,9 +62,7 @@ with col2:
         spine.set_visible(False)
     st.pyplot(fig, use_container_width=False)
 
-# ----------------------------
 # 🕒 Pipeline Run Summary
-# ----------------------------
 if os.path.exists(ARCHIVE_FILE):
     st.subheader("🕒 Pipeline Run Summary")
 
@@ -101,9 +91,7 @@ if os.path.exists(ARCHIVE_FILE):
 else:
     st.info("ℹ️ No archive_log.txt found yet — run prediction at least once.")
 
-# ----------------------------
 # 🧮 Recent Predictions
-# ----------------------------
 st.subheader("🧩 Recent Predictions")
 
 # แสดงเฉพาะคอลัมน์สำคัญเพื่อให้อ่านง่าย
@@ -113,9 +101,40 @@ if len(cols_to_show) > 0:
 else:
     st.dataframe(df.tail(10), use_container_width=True)
 
-# ----------------------------
+# 🚨 Alert Logs Section
+st.subheader("🚨 Alert Logs (Predicted as Malicious)")
+
+# กรองเฉพาะ log ที่ prediction == 1
+alerts_df = df[df["prediction"] == 1]
+
+if alerts_df.empty:
+    st.success("✅ No alerts detected in this dataset.")
+else:
+    st.info(f"Found {len(alerts_df):,} alert logs ({len(alerts_df) / len(df) * 100:.2f}%)")
+
+    # แสดงคอลัมน์สำคัญของ alert
+    alert_cols = [c for c in alerts_df.columns if c in [
+        "@timestamp", "source.ip", "destination.ip",
+        "destination.port", "network.protocol",
+        "http.request.method", "user_agent.original", "prediction"
+    ]]
+    # 👇 โชว์แค่ 20 แถวแรก
+    st.dataframe(alerts_df[alert_cols].head(20), use_container_width=True)
+
+    # 💾 ปุ่มดาวน์โหลด alert ทั้งหมด
+    import io
+    csv_buffer = io.StringIO()
+    alerts_df.to_csv(csv_buffer, index=False)
+    st.download_button(
+        label="⬇️ Download full Alerts CSV",
+        data=csv_buffer.getvalue(),
+        file_name="alerts_full.csv",
+        mime="text/csv",
+        help="Download all alert logs detected by the model."
+    )
+
+
 # 🕓 Archive Log (Raw)
-# ----------------------------
 st.subheader("🗂️ Archive Log (Latest 10 Records)")
 if os.path.exists(ARCHIVE_FILE):
     archive_lines = open(ARCHIVE_FILE, "r", encoding="utf-8").read().splitlines()
@@ -131,14 +150,10 @@ if os.path.exists(ARCHIVE_FILE):
 else:
     st.write("No archive_log.txt found.")
 
-# ----------------------------
 # 🔄 Refresh Button
-# ----------------------------
 if st.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
-# ----------------------------
 # 🕒 Last Update Time
-# ----------------------------
 st.caption(f"🕒 Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
