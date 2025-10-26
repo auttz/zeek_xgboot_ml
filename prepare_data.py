@@ -4,9 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 import ipaddress
 
-# --------------------------------------------------------
 # โหลด CSV จาก input folder
-# --------------------------------------------------------
 def load_csv(input_folder, keep_fields):
     files = glob.glob(os.path.join(input_folder, '*.csv'))
     if not files:
@@ -24,9 +22,7 @@ def load_csv(input_folder, keep_fields):
     return pd.concat(my_df, ignore_index=True)
 
 
-# --------------------------------------------------------
 # แปลง IP เป็น Octets
-# --------------------------------------------------------
 def ip_to_octets(ip):
     try:
         parts = str(ip).split(".")
@@ -44,44 +40,32 @@ def ip_to_octets(ip):
         return [0, 0, 0, 0]
 
 
-# --------------------------------------------------------
 # ฟังก์ชันหลัก: ทำความสะอาด + แปลงฟีเจอร์
 # (predict.py จะ import ฟังก์ชันนี้มาใช้ได้ตรง ๆ)
-# --------------------------------------------------------
 def transform_data(df):
-    # --------------------------------------------------------
     # 1) แปลง IP → octets
-    # --------------------------------------------------------
     src_octets = df['source.ip'].apply(ip_to_octets)
     df[["source_ip_oct1", "source_ip_oct2", "source_ip_oct3", "source_ip_oct4"]] = pd.DataFrame(src_octets.tolist(), index=df.index)
 
     dest_octets = df['destination.ip'].apply(ip_to_octets)
     df[["destination_ip_oct1", "destination_ip_oct2", "destination_ip_oct3", "destination_ip_oct4"]] = pd.DataFrame(dest_octets.tolist(), index=df.index)
 
-    # --------------------------------------------------------
     # 2) TF-IDF จาก url.original
-    # --------------------------------------------------------
     whitelist_tokens = ["login", "admin", "update", "download", "upload",
                         "passwd", "config", "reset", "token", "php"]
     vectorizer = TfidfVectorizer(vocabulary=whitelist_tokens, token_pattern=r'[a-zA-Z]{3,}')
     url_features = vectorizer.fit_transform(df["url.original"].astype(str))
     url_df = pd.DataFrame(url_features.toarray(), columns=vectorizer.get_feature_names_out())
 
-    # --------------------------------------------------------
     # 3) แปลง http.response.status_code → int
-    # --------------------------------------------------------
     df["status_code"] = pd.to_numeric(df["http.response.status_code"], errors="coerce").fillna(0).astype(int)
 
-    # --------------------------------------------------------
     # 4) Extract time features จาก @timestamp
-    # --------------------------------------------------------
     df["@timestamp"] = pd.to_datetime(df["@timestamp"], errors="coerce", format="%b %d, %Y @ %H:%M:%S.%f")
     df["hour"] = df["@timestamp"].dt.hour.fillna(0).astype(int)
     df["weekday"] = df["@timestamp"].dt.weekday.fillna(0).astype(int)
 
-    # --------------------------------------------------------
     # 5) ฟีเจอร์เดิม 8 ตัว
-    # --------------------------------------------------------
     df["is_error"] = 0
     for i in df.index:
         code = df.at[i, "status_code"]
@@ -135,9 +119,7 @@ def transform_data(df):
             if src_ip[0] == dst_ip[0]:
                 df.at[i, "ip_match_local"] = 1
 
-    # --------------------------------------------------------
     # 6) ฟีเจอร์พฤติกรรมใหม่อีก 8 ตัว
-    # --------------------------------------------------------
     df["is_common_port"] = 0
     for i in df.index:
         port = str(df.at[i, "destination.port"])
@@ -186,10 +168,12 @@ def transform_data(df):
         dst = str(df.at[i, "destination.geoip.country_code2"]).upper()
         if src == dst and src != "-" and src != "NONE":
             df.at[i, "same_country"] = 1
+    # ---- Windows System Traffic Features ----
+    df["ua_is_windows_ncsi"] = df["user_agent.original"].astype(str).str.contains("Microsoft NCSI", case=False, na=False).astype(int)
+    df["url_is_msftconnect"] = df["url.original"].astype(str).str.contains("msftconnecttest|microsoft|windowsupdate", case=False, na=False).astype(int)
+    df["dest_ip_is_microsoft"] = df["destination.ip"].astype(str).str.startswith(("13.107.", "20.", "40.", "52.", "65.", "103.21.")).astype(int)
 
-    # --------------------------------------------------------
     # 7) รวม features ทั้งหมด
-    # --------------------------------------------------------
     final_df = pd.concat([
         df[[
             "source_ip_oct1", "source_ip_oct2", "source_ip_oct3", "source_ip_oct4",
@@ -198,23 +182,22 @@ def transform_data(df):
             "is_error", "url_length", "num_special_chars", "contains_suspicious_keyword", "is_night",
             "src_is_private_ip", "dst_is_public_ip", "ip_match_local",
             "is_common_port", "protocol_is_http", "ua_is_bot", "ua_is_windows_update",
-            "url_has_file_ext", "req_method_is_post", "is_referrer_missing", "same_country"
+            "url_has_file_ext", "req_method_is_post", "is_referrer_missing", "same_country",
+            "ua_is_windows_ncsi", "url_is_msftconnect", "dest_ip_is_microsoft"
         ]],
         url_df
     ], axis=1)
 
-    # --------------------------------------------------------
-    # 8) Label (เฉพาะตอน training)
-    # --------------------------------------------------------
+    # 8) Label (รองรับทั้งกรณีเก่าและ dataset_v3)
     if "ioc.dest_ip_misp_is_alert" in df.columns:
         final_df["label"] = df["ioc.dest_ip_misp_is_alert"].astype(int)
+    elif "label" in df.columns:
+        final_df["label"] = df["label"].astype(int)
 
     return final_df
 
 
-# --------------------------------------------------------
 # main() สำหรับโหมด training เท่านั้น
-# --------------------------------------------------------
 def main():
     input_folder = sys.argv[1]
     output_folder = sys.argv[2]

@@ -26,6 +26,48 @@ def load_and_prepare_data(latest_csv):
     return df, df_clean
 
 
+# ⚙️ ฟังก์ชัน whitelist filtering
+def apply_whitelist(alerts_df):
+    whitelist_keywords = [
+        "microsoft",
+        "windowsupdate",
+        "msftconnecttest",
+        "msn.com",
+        "bing.com",
+        "windows.net",
+        "office365",
+        "live.com",
+        "microsoftonline",
+        "crl.microsoft.com",
+        "update.microsoft.com",
+        "windows.com",
+        "azureedge.net",
+        "microsoftcryptoapi"
+    ]
+
+    whitelist_columns = [
+        "url.full", "destination.domain", "http.host",
+        "user_agent.original", "http.request.referrer"
+    ]
+
+    # ✅ ตรวจทุก column ที่มี string และ whitelist keyword
+    whitelist_mask = pd.Series(False, index=alerts_df.index)
+    for col in whitelist_columns:
+        if col in alerts_df.columns:
+            whitelist_mask |= alerts_df[col].astype(str).str.lower().str.contains(
+                "|".join(whitelist_keywords), na=False
+            )
+
+    filtered_df = alerts_df[~whitelist_mask]
+    removed_count = len(alerts_df) - len(filtered_df)
+    if removed_count > 0:
+        print(f"🧾 Whitelist filter removed {removed_count} system-related alerts.")
+    else:
+        print("✅ No whitelist matches found.")
+
+    return filtered_df
+
+
 # 3️⃣ พยากรณ์และสร้างรายงาน
 def run_prediction(model_path, df, df_clean):
     print("🤖 Loading trained model ...")
@@ -54,9 +96,17 @@ def run_prediction(model_path, df, df_clean):
 
     # ✅ Extract alerts only
     alerts_df = df_result[df_result["prediction"] == 1]
-    alerts_count = len(alerts_df)
+    alerts_count_before = len(alerts_df)
+    print(f"🚨 Found {alerts_count_before} alerts before whitelist filtering.")
+
+    # 🧠 Apply whitelist filtering
+    alerts_df = apply_whitelist(alerts_df)
+    alerts_count_after = len(alerts_df)
+    print(f"🚨 Alerts before whitelist: {alerts_count_before}, after whitelist: {alerts_count_after}")
+
+    # 💾 Save filtered alerts
     alerts_df.to_csv("data/output/alerts.csv", index=False)
-    print(f"🚨 Found {alerts_count} alerts → saved to data/output/alerts.csv")
+    print(f"💾 Saved filtered alerts → data/output/alerts.csv")
 
     # 🧠 Calculate accuracy and classification report (if labeled)
     acc, report_html = None, "<p>No ground truth labels available.</p>"
@@ -91,7 +141,7 @@ def generate_html_report(df_result, alerts_df, acc, duration, report_html, outpu
         "total_logs": len(df_result),
         "alert_count": len(alerts_df),
         "normal_count": len(df_result) - len(alerts_df),
-        "alerts": alert_records,  # ✅ for Jinja2 table
+        "alerts": alert_records,
     }
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -119,33 +169,28 @@ def upload_to_minio(output_path):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         print("\n📤 Uploading to MinIO:")
 
-        # 🧾 HTML Report
         report_path = f"reports/{timestamp}/classification_report_predict.html"
         print(f"→ {report_path}")
         client.fput_object(bucket_name, report_path, output_path)
 
-        # 📊 CSV
         csv_path = "data/output/predict_result.csv"
         if os.path.exists(csv_path):
             csv_obj = f"datasets/{timestamp}/predict_result.csv"
             print(f"→ {csv_obj}")
             client.fput_object(bucket_name, csv_obj, csv_path)
 
-        # 🚨 Alerts CSV
         alert_path = "data/output/alerts.csv"
         if os.path.exists(alert_path):
             alert_obj = f"datasets/{timestamp}/alerts.csv"
             print(f"→ {alert_obj}")
             client.fput_object(bucket_name, alert_obj, alert_path)
 
-        # 🧠 Model
         model_path = "data/output/xgboost-model.pkl"
         if os.path.exists(model_path):
             model_obj = f"models/{timestamp}/xgboost-model.pkl"
             print(f"→ {model_obj}")
             client.fput_object(bucket_name, model_obj, model_path)
 
-        # 🗒️ Log
         log_path = "data/output/archive_log.txt"
         if os.path.exists(log_path):
             log_obj = f"logs/{timestamp}/archive_log.txt"
