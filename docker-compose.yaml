@@ -33,7 +33,6 @@ services:
       - ./data/newdata:/app/data/newdata  
       - ./data/output:/app/data/output
     depends_on:
-      - fetch-log
       - training
       - minio
     env_file:
