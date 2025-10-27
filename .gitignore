@@ -7,8 +7,6 @@ logs/
 *.xlsx
 
 # Environment
-.env
-*.env
 secrets/
 credentials/
 
