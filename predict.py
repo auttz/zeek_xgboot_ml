@@ -9,17 +9,21 @@ from prepare_data import transform_data
 # ------------------------------
 # 🌍 Global Path Settings
 # ------------------------------
-BASE_OUTPUT_DIR = os.getenv("OUTPUT_DIR", "/app/data/output")
+BASE_OUTPUT_DIR = os.getenv("OUTPUT_DIR", "data/output")
 os.makedirs(BASE_OUTPUT_DIR, exist_ok=True)
 
 # -------------------------------------------
 # 1️⃣ Helper: ค้นหา CSV ล่าสุด
 # -------------------------------------------
 def get_latest_csv(input_folder):
-    csv_files = glob.glob(os.path.join(input_folder, "*.csv"))
+    # ✅ รองรับทั้ง .csv และ .CSV (Linux case-sensitive)
+    csv_files = glob.glob(os.path.join(input_folder, "*.csv")) + glob.glob(os.path.join(input_folder, "*.CSV"))
     if not csv_files:
-        sys.exit("❌ No CSV files found in input folder.")
-    return max(csv_files, key=os.path.getmtime)
+        sys.exit(f"❌ No CSV files found in input folder: {input_folder}")
+    
+    latest = max(csv_files, key=os.path.getmtime)
+    print(f"🕒 Latest CSV selected: {os.path.basename(latest)}")
+    return latest
 
 # -------------------------------------------
 # 2️⃣ โหลดข้อมูล + เตรียมฟีเจอร์
@@ -180,9 +184,19 @@ def main():
 
     model_path, input_folder, _ = sys.argv[1:4]
 
+    # ✅ แปลง path ให้เป็น absolute (รันได้ทั้ง local และ Docker)
+    model_path = os.path.abspath(model_path)
+    input_folder = os.path.abspath(input_folder)
+
+    print(f"🧭 Model path: {model_path}")
+    print(f"📂 Input folder: {input_folder}")
+
+    # ✅ ค้นหา CSV ล่าสุดและ predict
     latest_csv = get_latest_csv(input_folder)
     df, df_clean = load_and_prepare_data(latest_csv)
     y_pred, acc, report_html, duration = run_prediction(model_path, df, df_clean)
+
+    # ✅ สร้างรายงาน / Upload / Archive
     html_output_path = generate_html_report(acc, duration, report_html)
     upload_to_minio()
     archive_and_log(latest_csv, input_folder, acc, duration, len(df))
