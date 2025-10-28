@@ -150,9 +150,7 @@ def upload_to_minio(output_path):
     
 
 
-# -------------------------------------------
 # 6️⃣ จัดการ archive และ log
-# -------------------------------------------
 def archive_and_log(latest_csv, input_folder, acc, duration, df_len):
     archive_dir = os.path.join(input_folder, "archive")
     os.makedirs(archive_dir, exist_ok=True)
@@ -170,9 +168,7 @@ def archive_and_log(latest_csv, input_folder, acc, duration, df_len):
     print("🗃 Archived input file & updated log.")
 
 
-# -------------------------------------------
 # 🧩 MAIN PIPELINE
-# -------------------------------------------
 def main():
     if len(sys.argv) < 4:
         sys.exit("Usage: python predict.py <model_path> <input_folder> <output_html>")
