@@ -1,6 +1,6 @@
 services:
   prepare-data:
-    build: .
+    image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
     container_name: prepare-data
     working_dir: /app
     volumes:
@@ -11,7 +11,7 @@ services:
     command: python prepare_data.py data/input data/output
 
   training:
-    build: .
+    image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
     container_name: training-ml
     working_dir: /app
     volumes:
@@ -27,7 +27,7 @@ services:
     command: python training-ml-xgboost.py data/output
 
   predict:
-    build: .
+    image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
     container_name: predict-ml
     working_dir: /app
     volumes:
@@ -57,7 +57,7 @@ services:
     command: server /data --console-address ":9090"
 
   dashboard:
-    build: .
+    image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
     container_name: dashboard-ml
     working_dir: /app
     ports:
@@ -69,7 +69,7 @@ services:
     command: streamlit run app_dashboard.py --server.port=8501 --server.address=0.0.0.0
 
   ml-serve:
-    build: .
+    image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
     container_name: ml-serve
     working_dir: /app
     ports:
