@@ -60,7 +60,7 @@ jobs:
       - name: Upload compose file artifact
         uses: actions/upload-artifact@v4
         with:
-          name: docker-compose-${{ env.TAG }}
+          name: docker-compose-latest
           path: /home/mladmin/zeek_xgboot_ml/docker-compose.yaml
 
   deploy:
@@ -80,7 +80,7 @@ jobs:
       - name: Download docker-compose.yaml artifact
         uses: actions/download-artifact@v4
         with:
-          name: docker-compose-${{ env.TAG || 'latest' }}
+          name: docker-compose-latest
 
       # 3️⃣ Deploy services locally (no SSH)
       - name: Deploy updated containers locally
