@@ -9,9 +9,13 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Checkout code
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      # 1️⃣ Use local source code instead of checkout (ไม่มีการ fetch จาก GitHub)
+      - name: Use local source code
+        run: |
+          cd /home/mladmin/zeek_xgboot_ml
+          echo "📂 Using existing local source code from server"
+          pwd
+          ls -la
 
       # 2️⃣ Login Docker Hub
       - name: Log in to Docker Hub
@@ -35,6 +39,7 @@ jobs:
 
       # 4️⃣ Build Docker image
       - name: Build Docker image
+        working-directory: /home/mladmin/zeek_xgboot_ml
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/zeek-prepare-data:${TAG} .
 
@@ -45,6 +50,7 @@ jobs:
 
       # 6️⃣ Update docker-compose.yaml with new tag
       - name: Update docker-compose.yaml with new tag
+        working-directory: /home/mladmin/zeek_xgboot_ml
         run: |
           sed -i "s|supreecha2003/zeek-prepare-data:.*|supreecha2003/zeek-prepare-data:${TAG}|g" docker-compose.yaml
           echo "✅ docker-compose.yaml updated with tag ${TAG}"
@@ -55,22 +61,26 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: docker-compose-${{ env.TAG }}
-          path: docker-compose.yaml
+          path: /home/mladmin/zeek_xgboot_ml/docker-compose.yaml
 
   deploy:
     runs-on: self-hosted
     needs: build   # ✅ รอให้ build เสร็จก่อน
 
     steps:
-      # 1️⃣ Checkout code
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      # 1️⃣ ใช้โค้ดในเครื่อง ไม่ต้อง checkout
+      - name: Use local source code
+        run: |
+          cd /home/mladmin/zeek_xgboot_ml
+          echo "📂 Using existing local source code from server"
+          pwd
+          ls -la
 
       # 2️⃣ Download compose artifact จาก job build
       - name: Download docker-compose.yaml artifact
         uses: actions/download-artifact@v4
         with:
-          name: docker-compose-${{ needs.build.outputs.TAG || 'latest' }}
+          name: docker-compose-${{ env.TAG || 'latest' }}
 
       # 3️⃣ Deploy services locally (no SSH)
       - name: Deploy updated containers locally
