@@ -1,21 +1,25 @@
 services:
   prepare-data:
-    image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
+    build: .
+    #image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
     container_name: prepare-data
     working_dir: /app
     volumes:
       - ./data/input:/app/data/input
       - ./data/output:/app/data/output
+      - ./prepare_data.py:/app/prepare_data.py
     environment:
       - TEST_SET_PCT=20
     command: python prepare_data.py data/input data/output
 
   training:
-    image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
+    build: .
+    #image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
     container_name: training-ml
     working_dir: /app
     volumes:
       - ./data/output:/app/data/output
+      - ./prepare_data.py:/app/prepare_data.py
     environment:
       - N_ESTIMATORS=100
       - LEARNING_RATE=0.1
@@ -27,7 +31,8 @@ services:
     command: python training-ml-xgboost.py data/output
 
   predict:
-    image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
+    build: .
+    #image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
     container_name: predict-ml
     working_dir: /app
     volumes:
@@ -69,13 +74,16 @@ services:
     command: streamlit run app_dashboard.py --server.port=8501 --server.address=0.0.0.0
 
   ml-serve:
-    image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
+    build: .
+    #image: supreecha2003/zeek-prepare-data:1.0.32-main-65c00d
     container_name: ml-serve
     working_dir: /app
     ports:
       - "8000:8000"
     volumes:
       - ./data/output:/app/data/output
+      - ./prepare_data.py:/app/prepare_data.py
     depends_on:
       - training
     command: python ml-serve.py
+

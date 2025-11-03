@@ -1,238 +1,250 @@
 import pandas as pd
-import os, sys, glob
+import os, sys, glob, ipaddress
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
-import ipaddress
 
-# โหลด CSV จาก input folder
-def load_csv(input_folder, keep_fields):
-    files = glob.glob(os.path.join(input_folder, '*.csv'))
+# -------------------------------------
+# 📥 โหลด CSV จาก input folder หรือไฟล์เดี่ยว
+# -------------------------------------
+def load_csv(input_path, keep_fields):
+    if os.path.isfile(input_path):
+        files = [input_path]
+    else:
+        files = glob.glob(os.path.join(input_path, "*.csv"))
+
     if not files:
-        sys.exit('There is no CSV Files')
-    my_df = []
+        sys.exit("❌ No CSV Files found.")
+
+    dfs = []
     for f in files:
-        df = pd.read_csv(f, on_bad_lines='skip')
-        # เติมคอลัมน์ที่หายไปให้ครบ
+        print(f"📄 Loading file:", os.path.basename(f))
+        df = pd.read_csv(f, on_bad_lines="skip")
         for col in keep_fields:
             if col not in df.columns:
                 df[col] = None
-        # เลือกเฉพาะคอลัมน์ที่ต้องใช้
         df = df[keep_fields]
-        my_df.append(df)
-    return pd.concat(my_df, ignore_index=True)
+        dfs.append(df)
+
+    print(f"✅ Loaded {len(dfs)} file(s) successfully.")
+    return pd.concat(dfs, ignore_index=True)
 
 
-# แปลง IP เป็น Octets
+# -------------------------------------
+# 🧩 แปลง IP → Octets
+# -------------------------------------
 def ip_to_octets(ip):
     try:
         parts = str(ip).split(".")
         if len(parts) == 4:
-            octets = []
-            for p in parts:
-                try:
-                    octets.append(int(p))
-                except:
-                    octets.append(0)
-            return octets
-        else:
-            return [0, 0, 0, 0]
+            return [int(p) if p.isdigit() else 0 for p in parts]
     except:
-        return [0, 0, 0, 0]
+        pass
+    return [0, 0, 0, 0]
 
 
-# ฟังก์ชันหลัก: ทำความสะอาด + แปลงฟีเจอร์
-# (predict.py จะ import ฟังก์ชันนี้มาใช้ได้ตรง ๆ)
-def transform_data(df):
-    # 1) แปลง IP → octets
-    src_octets = df['source.ip'].apply(ip_to_octets)
-    df[["source_ip_oct1", "source_ip_oct2", "source_ip_oct3", "source_ip_oct4"]] = pd.DataFrame(src_octets.tolist(), index=df.index)
+# -------------------------------------
+# 🧠 ฟังก์ชันหลัก: ทำความสะอาด + แปลงฟีเจอร์
+# -------------------------------------
+def transform_data(df, mode="auto"):
+    df = df.copy().fillna("-")
 
-    dest_octets = df['destination.ip'].apply(ip_to_octets)
-    df[["destination_ip_oct1", "destination_ip_oct2", "destination_ip_oct3", "destination_ip_oct4"]] = pd.DataFrame(dest_octets.tolist(), index=df.index)
+    # ========= 1️⃣ แปลง IP =========
+    src_octets = df["source.ip"].apply(ip_to_octets)
+    dest_octets = df["destination.ip"].apply(ip_to_octets)
+    df[[f"source_ip_oct{i}" for i in range(1, 5)]] = pd.DataFrame(src_octets.tolist(), index=df.index)
+    df[[f"destination_ip_oct{i}" for i in range(1, 5)]] = pd.DataFrame(dest_octets.tolist(), index=df.index)
 
-    # 2) TF-IDF จาก url.original
+    # ========= 2️⃣ TF-IDF จาก URL =========
     whitelist_tokens = ["login", "admin", "update", "download", "upload",
                         "passwd", "config", "reset", "token", "php"]
-    vectorizer = TfidfVectorizer(vocabulary=whitelist_tokens, token_pattern=r'[a-zA-Z]{3,}')
+    vectorizer = TfidfVectorizer(vocabulary=whitelist_tokens, token_pattern=r"[a-zA-Z]{3,}")
     url_features = vectorizer.fit_transform(df["url.original"].astype(str))
     url_df = pd.DataFrame(url_features.toarray(), columns=vectorizer.get_feature_names_out())
 
-    # 3) แปลง http.response.status_code → int
-    df["status_code"] = pd.to_numeric(df["http.response.status_code"], errors="coerce").fillna(0).astype(int)
-
-    # 4) Extract time features จาก @timestamp
-    df["@timestamp"] = pd.to_datetime(df["@timestamp"], errors="coerce", format="%b %d, %Y @ %H:%M:%S.%f")
+    # ========= 3️⃣ Time & HTTP Features =========
+    df["@timestamp"] = pd.to_datetime(df["@timestamp"], errors="coerce")
     df["hour"] = df["@timestamp"].dt.hour.fillna(0).astype(int)
     df["weekday"] = df["@timestamp"].dt.weekday.fillna(0).astype(int)
+    df["status_code"] = pd.to_numeric(df["http.response.status_code"], errors="coerce").fillna(0).astype(int)
+    df["is_error"] = (df["status_code"] >= 400).astype(int)
+    df["url_length"] = df["url.original"].astype(str).str.len()
+    df["num_special_chars"] = df["url.original"].astype(str).str.count(r"[?=&%]")
+    df["contains_suspicious_keyword"] = df["url.original"].astype(str).str.contains(
+        "login|admin|cmd|token|download|shell", case=False, na=False
+    ).astype(int)
+    df["is_night"] = df["hour"].apply(lambda x: 1 if x <= 5 or x >= 22 else 0)
 
-    # 5) ฟีเจอร์เดิม 8 ตัว
-    df["is_error"] = 0
-    for i in df.index:
-        code = df.at[i, "status_code"]
-        df.at[i, "is_error"] = 1 if code >= 400 else 0
+    # ========= 4️⃣ IP Behavior =========
+    def is_internal(ip):
+        try:
+            return ipaddress.ip_address(ip).is_private
+        except:
+            return False
 
-    df["url_length"] = 0
-    for i in df.index:
-        url = str(df.at[i, "url.original"])
-        df.at[i, "url_length"] = len(url)
+    df["src_is_private_ip"] = df["source.ip"].apply(is_internal).astype(int)
+    df["dst_is_internal_ip"] = df["destination.ip"].apply(is_internal).astype(int)
+    df["dst_is_public_ip"] = (df["dst_is_internal_ip"] == 0).astype(int)
+    df["ip_match_local"] = (
+        df["source.ip"].astype(str).str.split(".").str[0] ==
+        df["destination.ip"].astype(str).str.split(".").str[0]
+    ).astype(int)
 
-    df["num_special_chars"] = 0
-    for i in df.index:
-        url = str(df.at[i, "url.original"])
-        count = url.count('?') + url.count('=') + url.count('&') + url.count('%')
-        df.at[i, "num_special_chars"] = count
+    # ========= 5️⃣ Protocol & UA Behavior =========
+    df["is_common_port"] = df["destination.port"].astype(str).isin(["80", "443", "8080"]).astype(int)
+    df["protocol_is_http"] = df["network.protocol"].astype(str).str.contains("http", case=False, na=False).astype(int)
+    df["req_method_is_post"] = df["http.request.method"].astype(str).str.upper().eq("POST").astype(int)
+    df["is_referrer_missing"] = df["http.request.referrer"].astype(str).str.strip().isin(["-", "", "none"]).astype(int)
+    df["same_country"] = (
+        (df["source.geoip.country_code2"].astype(str).str.upper() ==
+         df["destination.geoip.country_code2"].astype(str).str.upper()) &
+        (df["source.geoip.country_code2"] != "-")
+    ).astype(int)
 
-    suspicious_words = ['login', 'admin', 'cmd', 'token', 'download', 'shell']
-    df["contains_suspicious_keyword"] = 0
-    for i in df.index:
-        url = str(df.at[i, "url.original"]).lower()
-        found = 0
-        for word in suspicious_words:
-            if word in url:
-                found = 1
-                break
-        df.at[i, "contains_suspicious_keyword"] = found
+    # ========= 6️⃣ User-Agent Intelligence =========
+    ua_col = df["user_agent.original"].astype(str).str.lower()
+    df["ua_is_empty"] = (ua_col == "-").astype(int)
+    df["ua_is_browser"] = ua_col.str.contains("mozilla|chrome|safari|edge|firefox", na=False).astype(int)
+    df["ua_is_microsoft"] = ua_col.str.contains("microsoft|windows|cryptoapi|msftconnect|delivery-optimization", na=False).astype(int)
+    df["ua_is_python_script"] = ua_col.str.contains("python|requests|urllib|aiohttp", na=False).astype(int)
+    df["ua_is_openstack"] = ua_col.str.contains("magnum|keystoneauth|openstack", na=False).astype(int)
+    df["ua_is_cloud_service"] = ua_col.str.contains("aws|google|gcp|azure|cloudflare", na=False).astype(int)
+    df["ua_is_bot"] = ua_col.str.contains("bot|crawler|curl", na=False).astype(int)
+    df["ua_is_windows_update"] = ua_col.str.contains("microsoft|windows", na=False).astype(int)
 
-    df["is_night"] = 0
-    for i in df.index:
-        hour = df.at[i, "hour"]
-        if hour <= 5 or hour >= 22:
-            df.at[i, "is_night"] = 1
+    # ========= 7️⃣ Suspicious Pattern =========
+    df["is_http_external"] = ((df["protocol_is_http"] == 1) & (df["dst_is_internal_ip"] == 0)).astype(int)
+    df["is_suspicious_http"] = ((df["is_http_external"] == 1) & (df["ua_is_empty"] == 1)).astype(int)
+    df["is_python_to_external"] = ((df["ua_is_python_script"] == 1) & (df["dst_is_internal_ip"] == 0)).astype(int)
+    df["is_openstack_internal"] = ((df["ua_is_openstack"] == 1) & (df["dst_is_internal_ip"] == 1)).astype(int)
 
-    df["src_is_private_ip"] = 0
-    for i in df.index:
-        ip_str = str(df.at[i, "source.ip"])
-        if ip_str.startswith("10.") or ip_str.startswith("192.168.") or ip_str.startswith("172."):
-            df.at[i, "src_is_private_ip"] = 1
+    # ========= 8️⃣ Microsoft Whitelist =========
+    def is_microsoft_system(ua, dest, url):
+        ua = str(ua).lower()
+        dest = str(dest).lower()
+        url = str(url).lower()
+        ms_keywords = [
+            "microsoft", "windows", "msftconnect", "cryptoapi",
+            "delivery-optimization", "tlu.dl.delivery.mp.microsoft.com",
+            "delivery.mp.microsoft.com", "officecdn", "windowsupdate",
+            "update", "microsoft.com", "msedge.net"
+        ]
+        return any(k in ua for k in ms_keywords) or any(k in dest for k in ms_keywords) or any(k in url for k in ms_keywords)
 
-    df["dst_is_public_ip"] = 0
-    for i in df.index:
-        ip_str = str(df.at[i, "destination.ip"])
-        if not (ip_str.startswith("10.") or ip_str.startswith("192.168.") or ip_str.startswith("172.")):
-            df.at[i, "dst_is_public_ip"] = 1
+    df["ua_is_microsoft_system"] = df.apply(
+        lambda x: is_microsoft_system(x["user_agent.original"], x["destination.ip"], x["url.original"]),
+        axis=1
+    ).astype(int)
 
-    df["ip_match_local"] = 0
-    for i in df.index:
-        src_ip = str(df.at[i, "source.ip"]).split(".")
-        dst_ip = str(df.at[i, "destination.ip"]).split(".")
-        if len(src_ip) == 4 and len(dst_ip) == 4:
-            if src_ip[0] == dst_ip[0]:
-                df.at[i, "ip_match_local"] = 1
+    def dest_is_microsoft_domain(dest):
+        if not isinstance(dest, str):
+            return False
+        dest = dest.lower()
+        microsoft_domains = [
+            ".microsoft.com", ".windowsupdate.com", ".msedge.net",
+            ".delivery.mp.microsoft.com", ".officecdn.microsoft.com"
+        ]
+        return any(dest.endswith(k) or k in dest for k in microsoft_domains)
 
-    # 6) ฟีเจอร์พฤติกรรมใหม่อีก 8 ตัว
-    df["is_common_port"] = 0
-    for i in df.index:
-        port = str(df.at[i, "destination.port"])
-        if port in ["80", "443", "8080"]:
-            df.at[i, "is_common_port"] = 1
+    df["dest_is_microsoft"] = df["destination.ip"].apply(dest_is_microsoft_domain).astype(int)
 
-    df["protocol_is_http"] = 0
-    for i in df.index:
-        proto = str(df.at[i, "network.protocol"]).lower()
-        if "http" in proto:
-            df.at[i, "protocol_is_http"] = 1
+    # ========= 9️⃣ Non-Browser External =========
+    df["is_non_browser_external"] = (
+        (df["ua_is_browser"] == 0) &
+        (df["dst_is_internal_ip"] == 0) &
+        (df["protocol_is_http"] == 1)
+    ).astype(int)
 
-    df["ua_is_bot"] = 0
-    for i in df.index:
-        ua = str(df.at[i, "user_agent.original"]).lower()
-        if any(bot in ua for bot in ["bot", "crawler", "curl", "python"]):
-            df.at[i, "ua_is_bot"] = 1
+    # ========= 🔟 Risk Scoring =========
+    df["risk_score"] = (
+        (df["is_suspicious_http"] * 2)
+        + (df["is_python_to_external"] * 3)
+        + (df["is_non_browser_external"] * 2)
+        + (df["is_http_external"] * 1)
+        - (df["is_openstack_internal"] * 2)
+    ).clip(lower=0, upper=10)
 
-    df["ua_is_windows_update"] = 0
-    for i in df.index:
-        ua = str(df.at[i, "user_agent.original"]).lower()
-        if "microsoft" in ua or "windows" in ua:
-            df.at[i, "ua_is_windows_update"] = 1
-
-    df["url_has_file_ext"] = 0
-    for i in df.index:
-        url = str(df.at[i, "url.original"]).lower()
-        if any(ext in url for ext in [".exe", ".zip", ".bat", ".php", ".js"]):
-            df.at[i, "url_has_file_ext"] = 1
-
-    df["req_method_is_post"] = 0
-    for i in df.index:
-        method = str(df.at[i, "http.request.method"]).upper()
-        if method == "POST":
-            df.at[i, "req_method_is_post"] = 1
-
-    df["is_referrer_missing"] = 0
-    for i in df.index:
-        ref = str(df.at[i, "http.request.referrer"]).strip()
-        if ref == "-" or ref == "" or ref.lower() == "none":
-            df.at[i, "is_referrer_missing"] = 1
-
-    df["same_country"] = 0
-    for i in df.index:
-        src = str(df.at[i, "source.geoip.country_code2"]).upper()
-        dst = str(df.at[i, "destination.geoip.country_code2"]).upper()
-        if src == dst and src != "-" and src != "NONE":
-            df.at[i, "same_country"] = 1
-    # ---- Windows System Traffic Features ----
-    df["ua_is_windows_ncsi"] = df["user_agent.original"].astype(str).str.contains("Microsoft NCSI", case=False, na=False).astype(int)
-    df["url_is_msftconnect"] = df["url.original"].astype(str).str.contains("msftconnecttest|microsoft|windowsupdate", case=False, na=False).astype(int)
-    df["dest_ip_is_microsoft"] = df["destination.ip"].astype(str).str.startswith(("13.107.", "20.", "40.", "52.", "65.", "103.21.")).astype(int)
-
-    # 7) รวม features ทั้งหมด
+    # ========= 🔟 รวมทั้งหมด =========
     final_df = pd.concat([
         df[[
-            "source_ip_oct1", "source_ip_oct2", "source_ip_oct3", "source_ip_oct4",
-            "destination_ip_oct1", "destination_ip_oct2", "destination_ip_oct3", "destination_ip_oct4",
-            "status_code", "hour", "weekday",
-            "is_error", "url_length", "num_special_chars", "contains_suspicious_keyword", "is_night",
+            "status_code", "hour", "weekday", "is_error", "url_length",
+            "num_special_chars", "contains_suspicious_keyword", "is_night",
             "src_is_private_ip", "dst_is_public_ip", "ip_match_local",
-            "is_common_port", "protocol_is_http", "ua_is_bot", "ua_is_windows_update",
-            "url_has_file_ext", "req_method_is_post", "is_referrer_missing", "same_country",
-            "ua_is_windows_ncsi", "url_is_msftconnect", "dest_ip_is_microsoft"
+            "is_common_port", "protocol_is_http", "req_method_is_post",
+            "is_referrer_missing", "same_country",
+            "ua_is_browser", "ua_is_microsoft", "ua_is_python_script",
+            "ua_is_openstack", "ua_is_cloud_service", "ua_is_bot",
+            "ua_is_windows_update", "ua_is_microsoft_system", "dest_is_microsoft",
+            "is_non_browser_external", "is_http_external", "is_suspicious_http",
+            "is_python_to_external", "is_openstack_internal", "risk_score"
         ]],
+        df[[f"source_ip_oct{i}" for i in range(1, 5)] +
+           [f"destination_ip_oct{i}" for i in range(1, 5)]],
         url_df
     ], axis=1)
 
-    # 8) Label (รองรับทั้งกรณีเก่าและ dataset_v3)
-    if "ioc.dest_ip_misp_is_alert" in df.columns:
+    # ======== 🧩 Label Handling (patched) ========
+    if mode == "auto":
+        mode = "train" if "ioc.dest_ip_misp_is_alert" in df.columns else "predict"
+
+    if mode == "train" and "ioc.dest_ip_misp_is_alert" in df.columns:
+        df["ioc.dest_ip_misp_is_alert"] = df["ioc.dest_ip_misp_is_alert"].fillna(0)
         final_df["label"] = df["ioc.dest_ip_misp_is_alert"].astype(int)
-    elif "label" in df.columns:
-        final_df["label"] = df["label"].astype(int)
+    elif mode == "predict":
+        for col in ["ioc.dest_ip_misp_is_alert", "label"]:
+            if col in final_df.columns:
+                final_df = final_df.drop(columns=[col])
+            
+    
 
     return final_df
 
 
-# main() สำหรับโหมด training เท่านั้น
+# -------------------------------------
+# 🚀 main() สำหรับ training mode
+# -------------------------------------
 def main():
     input_folder = sys.argv[1]
     output_folder = sys.argv[2]
     test_pct = int(os.getenv("TEST_SET_PCT", 20))
 
-    keep_fields = ['@timestamp',
-                    'source.ip',
-                    'destination.ip',
-                    'url.original',
-                    'http.response.status_code',
-                    'destination.port',
-                    'network.protocol',
-                    'user_agent.original',
-                    'http.request.method',
-                    'http.request.referrer',
-                    'source.geoip.country_code2',
-                    'destination.geoip.country_code2',
-                    'ioc.dest_ip_misp_is_alert']
+    keep_fields = [
+        "@timestamp", "source.ip", "destination.ip", "url.original",
+        "http.response.status_code", "destination.port", "network.protocol",
+        "user_agent.original", "http.request.method", "http.request.referrer",
+        "source.geoip.country_code2", "destination.geoip.country_code2",
+        "ioc.dest_ip_misp_is_alert"
+    ]
 
     os.makedirs(output_folder, exist_ok=True)
     df = load_csv(input_folder, keep_fields)
-    df_transform = transform_data(df)
+    script_path = os.path.join(input_folder, "script_attacks.csv")
+    if os.path.exists(script_path):
+        print("⚡ Merging script_attacks.csv into dataset...")
+        df_script = pd.read_csv(script_path, on_bad_lines="skip")
+        for col in keep_fields:
+            if col not in df_script.columns:
+                df_script[col] = None
+        df = pd.concat([df, df_script[keep_fields]], ignore_index=True)
+    else:
+        print("⚠️ script_attacks.csv not found — skipping merge")
+        
+    df_transformed = transform_data(df, mode="train")
 
-    print("✅ ขนาด dataset ทั้งหมด:", df_transform.shape)
-    if "label" in df_transform.columns:
-        print(df_transform['label'].value_counts())
+    print("✅ Dataset size:", df_transformed.shape)
+    if "label" in df_transformed.columns:
+        print(df_transformed["label"].value_counts())
 
-    train_df, test_df = train_test_split(df_transform, test_size=test_pct/100, random_state=42, stratify=df_transform["label"])
-    print("✅ training-set:", train_df.shape)
-    print("✅ testing-set:", test_df.shape)
+    train_df, test_df = train_test_split(
+        df_transformed,
+        test_size=test_pct/100,
+        random_state=42,
+        stratify=df_transformed["label"] if "label" in df_transformed else None
+    )
 
-    train_df.to_csv(os.path.join(output_folder, 'training-set.csv'), index=False)
-    test_df.to_csv(os.path.join(output_folder, 'testing-set.csv'), index=False)
-    print("✅ Data saved")
+    train_df.to_csv(os.path.join(output_folder, "training-set.csv"), index=False)
+    test_df.to_csv(os.path.join(output_folder, "testing-set.csv"), index=False)
+    print("✅ Data saved successfully.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
