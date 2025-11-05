@@ -25,7 +25,7 @@ services:
       - LEARNING_RATE=0.1
       - MAX_DEPTH=6
       - RANDOM_STATE=42
-      - SCALE_POS_WEIGHT=12
+      - SCALE_POS_WEIGHT=3.0
     depends_on:
       - prepare-data
     command: python training-ml-xgboost.py data/output
@@ -38,6 +38,7 @@ services:
     volumes:
       - ./data/newdata:/app/data/newdata  
       - ./data/output:/app/data/output
+      - ./prepare_data.py:/app/prepare_data.py
     depends_on:
       - training
       - minio

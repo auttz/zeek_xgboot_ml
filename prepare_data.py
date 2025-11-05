@@ -1,5 +1,6 @@
 import pandas as pd
 import os, sys, glob, ipaddress
+from urllib.parse import urlparse
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -193,8 +194,38 @@ def transform_data(df, mode="auto"):
         for col in ["ioc.dest_ip_misp_is_alert", "label"]:
             if col in final_df.columns:
                 final_df = final_df.drop(columns=[col])
-            
-    
+
+    # ========= 🧩 เพิ่มฟีเจอร์เชิงพฤติกรรมใหม่ =========
+    # เพิ่มเฉพาะ 5 ตัวที่ยังไม่มี
+    df["url.original"] = df["url.original"].fillna("-").astype(str)
+    df["http.request.method"] = df["http.request.method"].fillna("-").astype(str)
+    df["user_agent.original"] = df["user_agent.original"].fillna("-").astype(str)
+    df["http.request.referrer"] = df["http.request.referrer"].fillna("-").astype(str)
+
+    if "url_depth" not in final_df.columns:
+        final_df["url_depth"] = df["url.original"].apply(lambda x: x.count("/") if isinstance(x, str) else 0)
+
+    if "has_query" not in final_df.columns:
+        final_df["has_query"] = df["url.original"].apply(lambda x: "?" in x)
+
+    if "method_is_uncommon" not in final_df.columns:
+        uncommon = {"PUT", "DELETE", "OPTIONS", "TRACE", "CONNECT"}
+        final_df["method_is_uncommon"] = df["http.request.method"].str.upper().isin(uncommon)
+
+    if "referrer_is_external" not in final_df.columns:
+        def is_external_ref(row):
+            try:
+                ref_host = urlparse(row["http.request.referrer"]).hostname or ""
+                dest_host = urlparse(row["url.original"]).hostname or ""
+                return bool(ref_host and dest_host and ref_host != dest_host)
+            except:
+                return False
+        final_df["referrer_is_external"] = df.apply(is_external_ref, axis=1)
+
+    if "ua_length" not in final_df.columns:
+        final_df["ua_length"] = df["user_agent.original"].apply(lambda x: len(x) if isinstance(x, str) else 0)
+
+    print("✅ Added new features: url_depth, has_query, method_is_uncommon, referrer_is_external, ua_length")
 
     return final_df
 
@@ -227,7 +258,7 @@ def main():
         df = pd.concat([df, df_script[keep_fields]], ignore_index=True)
     else:
         print("⚠️ script_attacks.csv not found — skipping merge")
-        
+
     df_transformed = transform_data(df, mode="train")
 
     print("✅ Dataset size:", df_transformed.shape)

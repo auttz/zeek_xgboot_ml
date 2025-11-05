@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import joblib
 import pandas as pd
 import os
+import time
 from prepare_data import transform_data
 
 app = Flask(__name__)
@@ -15,6 +16,9 @@ if not os.path.exists(MODEL_PATH):
 
 model = joblib.load(MODEL_PATH)
 print("✅ Model loaded successfully.")
+print(f"🧭 Model path: {MODEL_PATH}")
+print(f"📅 Model last modified: {time.ctime(os.path.getmtime(MODEL_PATH))}")
+
 
 
 # -----------------------------
@@ -46,6 +50,7 @@ def predict():
         print("\n🧩 [DEBUG] Sample transformed row:")
         print(df_transformed.head(1).to_dict(orient="records"))
 
+
         # 🔮 Predict
         predictions = model.predict(df_transformed)
         result = predictions.tolist()
@@ -74,6 +79,7 @@ def predict():
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({"message": "🚀 ML Serve API is running"})
+
 
 
 if __name__ == "__main__":

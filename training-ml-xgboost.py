@@ -43,7 +43,7 @@ def main(output_folder):
     learning_rate = float(os.getenv("LEARNING_RATE", 0.1))
     max_depth = int(os.getenv("MAX_DEPTH", 6))
     random_state = int(os.getenv("RANDOM_STATE", 42))
-    scale_pos_weight = float(os.getenv("SCALE_POS_WEIGHT", 24.0))
+    scale_pos_weight = float(os.getenv("SCALE_POS_WEIGHT", 3.0))
 
     params_used = {
         "n_estimators": n_estimators,
@@ -131,6 +131,7 @@ def main(output_folder):
     print(f"💾 Model saved → {model_path}")
 
     print("✅ Training pipeline completed successfully.")
+    
 
 
 # ------------------------------
