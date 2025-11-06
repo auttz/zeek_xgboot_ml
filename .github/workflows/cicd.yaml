@@ -65,7 +65,7 @@ jobs:
 
   deploy:
     runs-on: self-hosted
-    needs: build   # รอให้ build เสร็จก่อน
+    needs: build  
 
     steps:
       # 1️⃣ ใช้โค้ดในเครื่อง ไม่ต้อง checkout
