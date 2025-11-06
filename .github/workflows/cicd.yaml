@@ -37,7 +37,7 @@ jobs:
           echo "TAG=$TAG" >> $GITHUB_ENV
           echo "🏷️ Tag will be: ${TAG}"
 
-      # 4️⃣ Build Docker image
+      # 4️⃣Build Docker image
       - name: Build Docker image
         working-directory: /home/mladmin/zeek_xgboot_ml
         run: |
