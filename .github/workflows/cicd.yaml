@@ -17,7 +17,7 @@ jobs:
           pwd
           ls -la
 
-      # 2️⃣ Login Docker Hub
+      # 2️⃣Login Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
