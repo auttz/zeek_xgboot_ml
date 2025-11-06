@@ -75,7 +75,7 @@ jobs:
           echo "📂 Using existing local source code from server"
           pwd
           ls -la
-      # อัปเดตไฟล์โมเดลล่าสุด
+          
       - name: Copy latest model into output
         run: |
           echo "🧠 Copying latest model into output folder..."
