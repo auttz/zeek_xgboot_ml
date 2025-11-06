@@ -75,6 +75,12 @@ jobs:
           echo "📂 Using existing local source code from server"
           pwd
           ls -la
+      # อัปเดตไฟล์โมเดลล่าสุด
+      - name: Copy latest model into output
+        run: |
+          echo "🧠 Copying latest model into output folder..."
+          cp /home/mladmin/zeek_xgboot_ml/model_repo/xgboost-model.pkl /home/mladmin/zeek_xgboot_ml/data/output/xgboost-model.pkl
+          ls -lh /home/mladmin/zeek_xgboot_ml/data/output/
 
       # 2️⃣ Download compose artifact จาก job build
       - name: Download docker-compose.yaml artifact
