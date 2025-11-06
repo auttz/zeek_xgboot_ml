@@ -9,7 +9,7 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Use local source code instead of checkout (ไม่มีการ fetch จาก GitHub)
+      # 1️⃣ Use local source code instead of checkout
       - name: Use local source code
         run: |
           cd /home/mladmin/zeek_xgboot_ml
